@@ -1,0 +1,30 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    env_file:
+      - ml-service.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - artifacts:/artifacts
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  trainer:
+    build:
+      context: .
+      dockerfile: docker/trainer.Dockerfile
+    env_file:
+      - ml-service.env
+    volumes:
+      - artifacts:/artifacts
+      - ./data:/data:ro
+    entrypoint: ["python", "-m", "pipeline.run"]
+
+volumes:
+  artifacts:
