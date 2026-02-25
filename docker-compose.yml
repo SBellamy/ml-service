@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - artifacts:/artifacts
+    environment:
+      - ARTIFACTS_DIR=/artifacts
+
+  trainer:
+    build:
+      context: .
+      dockerfile: docker/trainer.Dockerfile
+    volumes:
+      - artifacts:/artifacts
+      - ./data:/data:ro
+    environment:
+      - ARTIFACTS_DIR=/artifacts
+    entrypoint: ["python", "-m", "pipeline.run"]
+
+volumes:
+  artifacts:
