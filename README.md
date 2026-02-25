@@ -49,7 +49,22 @@ Validation enforced by `pipeline/validate.py`:
 docker compose build
 ```
 
-### 2. Run a training job
+### 2. Configure environment
+
+`docker-compose.yml` loads `ml-service.env` for both `trainer` and `api`.
+
+Example:
+
+```env
+ARTIFACTS_DIR=/artifacts
+BALANCED_CLASS_WEIGHT=True
+```
+
+`BALANCED_CLASS_WEIGHT` behavior:
+- `True`: trainer uses `LogisticRegression(class_weight="balanced")`.
+- Any other value: trainer uses default class weights (`class_weight=None`).
+
+### 3. Run a training job
 
 ```bash
 docker compose run --rm trainer --csv /data/day_01.csv
@@ -60,13 +75,13 @@ Notes:
 - `pipeline.run` requires the `--csv` argument.
 - Model artifacts are written to the shared `artifacts` volume at `/artifacts/models/...`.
 
-### 3. Start API
+### 4. Start API
 
 ```bash
 docker compose up -d api
 ```
 
-### 4. Check health/readiness
+### 5. Check health/readiness
 
 ```bash
 curl http://localhost:8000/healthz
@@ -79,7 +94,7 @@ If `readyz` is `false`, run training first or reload the model after training:
 curl -X POST http://localhost:8000/model/reload
 ```
 
-### 5. Run prediction
+### 6. Run prediction
 
 ```bash
 curl -X POST http://localhost:8000/predict \

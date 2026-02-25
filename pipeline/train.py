@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression
@@ -24,7 +26,12 @@ def train_model(df: pd.DataFrame) -> tuple[BaseEstimator, pd.DataFrame, pd.Serie
     model: BaseEstimator = Pipeline(
         steps=[
             ("scaler", StandardScaler()),
-            ("classifier", LogisticRegression(max_iter=1000, random_state=42)),
+            ("classifier", LogisticRegression(
+                max_iter=1000, 
+                random_state=42, 
+                class_weight="balanced" if os.getenv("BALANCED_CLASS_WEIGHT") == "True" else None
+                )
+            ),
         ]
     )
 

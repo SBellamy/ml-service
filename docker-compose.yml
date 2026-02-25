@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
+    env_file:
+      - ml-service.env
     ports:
       - "8000:8000"
     volumes:
@@ -17,6 +19,8 @@ services:
     build:
       context: .
       dockerfile: docker/trainer.Dockerfile
+    env_file:
+      - ml-service.env
     volumes:
       - artifacts:/artifacts
       - ./data:/data:ro
