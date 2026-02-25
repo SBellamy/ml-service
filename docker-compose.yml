@@ -7,8 +7,6 @@ services:
       - "8000:8000"
     volumes:
       - artifacts:/artifacts
-    environment:
-      - ARTIFACTS_DIR=/artifacts
 
   trainer:
     build:
@@ -17,8 +15,6 @@ services:
     volumes:
       - artifacts:/artifacts
       - ./data:/data:ro
-    environment:
-      - ARTIFACTS_DIR=/artifacts
     entrypoint: ["python", "-m", "pipeline.run"]
 
 volumes:
