@@ -1,13 +1,21 @@
-from fastapi import FastAPI, HTTPException
-from api.schemas import PredictRequest, PredictResponse
-from api.model_store import build_store
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+from fastapi import FastAPI, HTTPException
+
+from api.model_store import build_store
+from api.schemas import PredictRequest, PredictResponse
+
 store = build_store()
 
-@app.on_event("startup")
-def startup():
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     store.load()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
 
 @app.get("/healthz")
 def healthz():
