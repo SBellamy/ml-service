@@ -26,5 +26,15 @@ services:
       - ./data:/data:ro
     entrypoint: ["python", "-m", "pipeline.run"]
 
+  test:
+    build:
+      context: .
+      dockerfile: docker/test.Dockerfile
+    env_file:
+      - ml-service.env
+    volumes:
+      - artifacts:/artifacts
+    command: ["pytest", "-q"]
+
 volumes:
   artifacts:
