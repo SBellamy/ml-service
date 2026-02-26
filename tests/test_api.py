@@ -108,7 +108,7 @@ def test_predict_503_when_not_ready(tmp_path, monkeypatch):
     assert r.status_code == 503
 
 
-def test_predict_ok_after_model_reload(tmp_path, monkeypatch):
+def test_predict_auto_refreshes_after_new_promotion(tmp_path, monkeypatch):
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir()
 
@@ -116,12 +116,8 @@ def test_predict_ok_after_model_reload(tmp_path, monkeypatch):
     app = load_app_with_env(monkeypatch, artifacts_dir)
     client = TestClient(app)
 
-    # Write artifacts after app startup - then reload
+    # Write artifacts after app startup. The API should auto-refresh.
     write_production_artifacts(artifacts_dir)
-
-    r = client.post("/model/reload")
-    assert r.status_code == 200
-    assert r.json()["reloaded"] is True
 
     r = client.get("/readyz")
     assert r.status_code == 200
