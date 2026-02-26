@@ -1,9 +1,8 @@
 # ML Service
 
-A small ML service that trains a tabular model, conditionally promotes it to production,
-and serves predictions via an API.
+A small ML service that trains a tabular model, promotes better versions, and serves predictions via an API.
 
-Containerized with Docker Compose. API and trainer services share a Docker volume for model artifacts.
+Everything runs in Docker Compose. Trainer and API share a volume for model artifacts.
 
 Quickstart:
 
@@ -13,22 +12,23 @@ make build && make train && make serve && make predict
 
 ## Architecture
 
-- Trainer validates CSV data, trains/evaluates a model, and promotes only on improved F1.
-- API loads the production model and serves `/healthz`, `/readyz`, `/model/reload`, and `/predict`.
-- Both services use a shared `artifacts` volume for model handoff.
+- Trainer validates CSV data, trains/evaluates a model, and promotes only when F1 improves.
+- Promotions are atomic: models are written to `models/versions/<version_id>` and `models/CURRENT` is atomically swapped.
+- API auto-refreshes to the latest promoted version by following `models/CURRENT`.
 
-## Repository Layout
+## Repo Layout
 
-- `api/`: FastAPI app, schemas, and model loading logic.
-- `pipeline/`: validation, training, evaluation, and promotion flow.
-- `docker/`: Dockerfiles for API, trainer, and test containers.
+- `api/`: FastAPI app, schemas, model store.
+- `pipeline/`: validate/train/evaluate/promote logic.
+- `tests/`: API and pipeline tests.
+- `docker/`: API, trainer, and test Dockerfiles.
 - `data/`: sample CSV datasets.
-- `docker-compose.yml`: service and volume wiring.
-- `Makefile`: main entrypoint for build/train/serve/test/cleanup commands.
+- `docker-compose.yml`: services + shared volume wiring.
+- `Makefile`: day-to-day commands.
 
 ## Data Contract
 
-Training CSV must contain:
+Training CSV must include:
 - `age`
 - `income`
 - `account_balance`
@@ -36,24 +36,22 @@ Training CSV must contain:
 - `is_premium`
 - `target`
 
-Validation enforced by `pipeline/validate.py`:
-- Required columns present.
-- No nulls.
-- `target` contains only `0` or `1`.
+Validation rules:
+- required columns present
+- no nulls
+- `target` is binary (`0/1`)
 
 ## Usage Workflow
 
-`Makefile` is the primary interface for common tasks. Targets wrap the existing Docker Compose commands.
-
-### 1. Build images
+### 1. Build
 
 ```bash
 make build
 ```
 
-### 2. Configure environment
+### 2. Configure env
 
-`docker-compose.yml` loads `ml-service.env` for both `trainer` and `api`.
+`docker-compose.yml` loads `ml-service.env` for `trainer` and `api`.
 
 Example:
 
@@ -62,48 +60,41 @@ ARTIFACTS_DIR=/artifacts
 BALANCED_CLASS_WEIGHT=True
 ```
 
-`BALANCED_CLASS_WEIGHT` behavior:
-- `True`: trainer uses `LogisticRegression(class_weight="balanced")`.
-- Any other value: trainer uses default class weights (`class_weight=None`).
+`BALANCED_CLASS_WEIGHT=True` enables `class_weight="balanced"` in logistic regression.
 
-### 3. Run a training job
+### 3. Train
 
 ```bash
 make train
 ```
 
 Notes:
-- `trainer` mounts `./data` as read-only at `/data`.
-- Model artifacts are written to the shared `artifacts` volume at `/artifacts/models/...`.
-- Default dataset is `day_01.csv`.
-- Override dataset with `make train DAY=day_12.csv`.
+- default dataset is `day_01.csv`
+- override dataset with `make train DAY=day_12.csv`
+- artifacts go to `/artifacts/models/...`
 
-### 4. Start API
+### 4. Serve API
 
 ```bash
 make serve
 ```
 
-### 5. Check health/readiness
+### 5. Check status
 
 ```bash
 make health
 make ready
 ```
 
-If `readyz` is `false`, run training first or reload the model after training:
+If `ready` is false, train a model first. `make reload` is available as a forced refresh, but normal promotions are picked up automatically.
 
-```bash
-make reload
-```
-
-### 6. Run prediction
+### 6. Predict
 
 ```bash
 make predict
 ```
 
-Expected response shape:
+Example response:
 
 ```json
 {
@@ -112,54 +103,35 @@ Expected response shape:
 }
 ```
 
-## Artifacts and Promotion
+## Model Metadata Schema
 
-The trainer writes:
-- `models/staging/model.joblib`
-- `models/staging/metadata.json`
+Each promoted version stores `metadata.json` with:
+- `model_version_id`
+- `metric.name` and `metric.value`
+- `training_data_file`
+- `trained_at`
+- `feature_schema_version`
+- `schema_version`
 
-Then it compares staged F1 vs current production F1:
-- Promote when `new_score > current_score`.
-- Reject otherwise.
+## Artifacts + Promotion
 
-On promotion, production artifacts are replaced under:
-- `models/production/model.joblib`
-- `models/production/metadata.json`
+Layout:
+- `models/CURRENT` (active version id)
+- `models/versions/<version_id>/model.joblib`
+- `models/versions/<version_id>/metadata.json`
+
+Promotion policy:
+- promote when `new_f1 > current_f1`
+- reject otherwise
+- rejected runs still keep their version directory for rollback/history
 
 ## Useful Commands
 
-Run full test suite in container:
-
 ```bash
-make test
-```
-
-Follow API logs:
-
-```bash
-make logs
-```
-
-Show service status:
-
-```bash
-make ps
-```
-
-Stop services:
-
-```bash
-make stop
-```
-
-Stop and remove containers/networks:
-
-```bash
-make cleanup
-```
-
-Stop and remove everything, including the artifacts volume:
-
-```bash
-make nuke
+make test       # run full test suite in test container
+make logs       # tail API logs
+make ps         # show compose service state
+make stop       # stop services
+make cleanup    # stop + remove containers/networks
+make nuke       # cleanup + remove artifacts volume
 ```
