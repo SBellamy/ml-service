@@ -3,14 +3,18 @@ import json
 import os
 import time
 from pathlib import Path
-import shutil
 import pandas as pd
 import joblib
-from sklearn.metrics import classification_report
 
 from pipeline.train import train_model
 from pipeline.validate import validate_df
 from pipeline.evaluate import evaluate
+from pipeline.promote import (
+    new_version_id,
+    promote_version_atomically,
+    read_current_score,
+    validate_model_artifacts,
+)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -21,8 +25,8 @@ def run_pipeline(csv_path: Path):
     df = pd.read_csv(csv_path)
 
     artifacts = Path(os.environ.get("ARTIFACTS_DIR", "/artifacts"))
-    staging = artifacts / "models/staging"
-    production = artifacts / "models/production"
+    models_root = artifacts / "models"
+    versions_dir = models_root / "versions"
     
     validate_df(df)
     print("Data validation passed!")
@@ -37,29 +41,27 @@ def run_pipeline(csv_path: Path):
         "metric_name": "f1",
         "score": score,
         "trained_at": int(time.time()),
+        "source_csv": str(csv_path),
     }
 
-    if staging.exists():
-        shutil.rmtree(staging)
-    staging.mkdir(parents=True, exist_ok=True)
+    version = new_version_id()
+    version_dir = versions_dir / version
+    version_dir.mkdir(parents=True, exist_ok=False)
 
-    joblib.dump(model, staging / "model.joblib")
-    (staging / "metadata.json").write_text(json.dumps(meta, indent=2))
+    joblib.dump(model, version_dir / "model.joblib")
+    (version_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
+    validate_model_artifacts(version_dir)
 
-    promote = True
-    if (production / "metadata.json").exists():
-        current = json.loads((production / "metadata.json").read_text())
-        promote = score > current["score"]
+    current_score = read_current_score(models_root)
+    promote = current_score is None or score > current_score
 
     if promote:
-        if production.exists():
-            shutil.rmtree(production)
-        shutil.move(staging, production)
+        promote_version_atomically(models_root, version)
         decision = "PROMOTED"
     else:
         decision = "REJECTED"
 
-    print(json.dumps({"decision": decision, "score": score}, indent=2))
+    print(json.dumps({"decision": decision, "score": score, "version": version}, indent=2))
 
 if __name__ == "__main__":
     args = parse_args()
