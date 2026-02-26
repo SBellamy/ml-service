@@ -9,6 +9,7 @@ import joblib
 from pipeline.train import train_model
 from pipeline.validate import validate_df
 from pipeline.evaluate import evaluate
+from pipeline.metadata import build_model_metadata
 from pipeline.promote import (
     new_version_id,
     promote_version_atomically,
@@ -37,16 +38,17 @@ def run_pipeline(csv_path: Path):
     score = evaluate(model, X_test, y_test)
     print("Model evaluation complete!")
 
-    meta = {
-        "metric_name": "f1",
-        "score": score,
-        "trained_at": int(time.time()),
-        "source_csv": str(csv_path),
-    }
-
     version = new_version_id()
     version_dir = versions_dir / version
     version_dir.mkdir(parents=True, exist_ok=False)
+
+    meta = build_model_metadata(
+        model_version_id=version,
+        metric_name="f1",
+        metric_value=score,
+        training_data_file=csv_path,
+        trained_at=int(time.time()),
+    )
 
     joblib.dump(model, version_dir / "model.joblib")
     (version_dir / "metadata.json").write_text(json.dumps(meta, indent=2))

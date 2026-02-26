@@ -40,7 +40,17 @@ def write_production_artifacts(artifacts_dir: Path):
 
     joblib.dump(model, prod / "model.joblib")
     (prod / "metadata.json").write_text(
-        json.dumps({"metric_name": "f1", "score": 1.0, "trained_at": 0}, indent=2)
+        json.dumps(
+            {
+                "schema_version": "v1",
+                "model_version_id": version,
+                "metric": {"name": "f1", "value": 1.0},
+                "training_data_file": "test.csv",
+                "trained_at": 0,
+                "feature_schema_version": "v1",
+            },
+            indent=2,
+        )
     )
     (models_root / "CURRENT").write_text(f"{version}\n")
 

@@ -28,7 +28,7 @@ def read_prod_score(artifacts_dir: Path) -> float:
     assert current_version is not None
     meta_path = artifacts_dir / "models" / "versions" / current_version / "metadata.json"
     meta = json.loads(meta_path.read_text())
-    return float(meta["score"])
+    return float(meta["metric"]["value"])
 
 
 def test_pipeline_promotes_then_rejects(tmp_path, monkeypatch):

@@ -25,7 +25,7 @@ def resolve_version_dir(models_root: Path, version: str) -> Path:
 
 def read_score(model_dir: Path) -> float:
     metadata = json.loads((model_dir / "metadata.json").read_text())
-    return float(metadata["score"])
+    return float(metadata["metric"]["value"])
 
 
 def read_current_score(models_root: Path) -> float | None:
