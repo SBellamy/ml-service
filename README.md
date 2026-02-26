@@ -1,30 +1,30 @@
-# ml-service
+# ML Service
 
-A small MLOps-style service with two containers:
-- `trainer`: runs the training pipeline against a CSV file.
-- `api`: serves predictions from the promoted model.
+A small ML service that trains a tabular model, conditionally promotes it to production,
+and serves predictions via an API.
 
-Both services share a Docker volume for model artifacts.
+Containerized with Docker Compose. API and trainer services share a Docker volume for model artifacts.
+
+Quickstart:
+
+```bash
+make build && make train && make serve && make predict
+```
 
 ## Architecture
 
-- `pipeline/run.py` executes: validate -> train -> evaluate (F1) -> stage artifacts -> promote if score improves.
-- `api/main.py` loads `models/production` artifacts and exposes inference endpoints.
-- Shared volume: `artifacts`.
+- Trainer validates CSV data, trains/evaluates a model, and promotes only on improved F1.
+- API loads the production model and serves `/healthz`, `/readyz`, `/model/reload`, and `/predict`.
+- Both services use a shared `artifacts` volume for model handoff.
 
 ## Repository Layout
 
-- `api/main.py`: FastAPI app and routes.
-- `api/schemas.py`: request/response models.
-- `api/model_store.py`: thread-safe model loading and prediction.
-- `pipeline/validate.py`: input data validation.
-- `pipeline/train.py`: train/test split and model training.
-- `pipeline/evaluate.py`: F1 computation.
-- `pipeline/run.py`: end-to-end training and promotion logic.
-- `pipeline/promote.py`: placeholder for atomic promotion helper (currently unused).
-- `docker/api.Dockerfile`: API image.
-- `docker/trainer.Dockerfile`: trainer image.
-- `docker-compose.yml`: service wiring and shared volume config.
+- `api/`: FastAPI app, schemas, and model loading logic.
+- `pipeline/`: validation, training, evaluation, and promotion flow.
+- `docker/`: Dockerfiles for API, trainer, and test containers.
+- `data/`: sample CSV datasets.
+- `docker-compose.yml`: service and volume wiring.
+- `Makefile`: main entrypoint for build/train/serve/test/cleanup commands.
 
 ## Data Contract
 
@@ -41,12 +41,14 @@ Validation enforced by `pipeline/validate.py`:
 - No nulls.
 - `target` contains only `0` or `1`.
 
-## Docker Compose Workflow
+## Usage Workflow
+
+`Makefile` is the primary interface for common tasks. Targets wrap the existing Docker Compose commands.
 
 ### 1. Build images
 
 ```bash
-docker compose build
+make build
 ```
 
 ### 2. Configure environment
@@ -67,45 +69,38 @@ BALANCED_CLASS_WEIGHT=True
 ### 3. Run a training job
 
 ```bash
-docker compose run --rm trainer --csv /data/day_01.csv
+make train
 ```
 
 Notes:
 - `trainer` mounts `./data` as read-only at `/data`.
-- `pipeline.run` requires the `--csv` argument.
 - Model artifacts are written to the shared `artifacts` volume at `/artifacts/models/...`.
+- Default dataset is `day_01.csv`.
+- Override dataset with `make train DAY=day_12.csv`.
 
 ### 4. Start API
 
 ```bash
-docker compose up -d api
+make serve
 ```
 
 ### 5. Check health/readiness
 
 ```bash
-curl http://localhost:8000/healthz
-curl http://localhost:8000/readyz
+make health
+make ready
 ```
 
 If `readyz` is `false`, run training first or reload the model after training:
 
 ```bash
-curl -X POST http://localhost:8000/model/reload
+make reload
 ```
 
 ### 6. Run prediction
 
 ```bash
-curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{
-    "age": 42,
-    "income": 85000,
-    "account_balance": 12000,
-    "transactions_last_30d": 18,
-    "is_premium": 1
-  }'
+make predict
 ```
 
 Expected response shape:
@@ -133,26 +128,38 @@ On promotion, production artifacts are replaced under:
 
 ## Useful Commands
 
-Run training on a different dataset:
+Run full test suite in container:
 
 ```bash
-docker compose run --rm trainer --csv /data/day_12.csv
+make test
 ```
 
 Follow API logs:
 
 ```bash
-docker compose logs -f api
+make logs
+```
+
+Show service status:
+
+```bash
+make ps
 ```
 
 Stop services:
 
 ```bash
-docker compose down
+make stop
 ```
 
-Stop and remove volume (clears saved models):
+Stop and remove containers/networks:
 
 ```bash
-docker compose down -v
+make cleanup
+```
+
+Stop and remove everything, including the artifacts volume:
+
+```bash
+make nuke
 ```
