@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from pipeline.promote import read_current_version
 from pipeline.run import run_pipeline
 
 
@@ -23,7 +24,9 @@ def write_csv(path: Path, rows: list[list[int | float]]):
 
 
 def read_prod_score(artifacts_dir: Path) -> float:
-    meta_path = artifacts_dir / "models" / "production" / "metadata.json"
+    current_version = read_current_version(artifacts_dir / "models")
+    assert current_version is not None
+    meta_path = artifacts_dir / "models" / "versions" / current_version / "metadata.json"
     meta = json.loads(meta_path.read_text())
     return float(meta["score"])
 
@@ -51,8 +54,10 @@ def test_pipeline_promotes_then_rejects(tmp_path, monkeypatch):
     )
     run_pipeline(csv_a)
 
-    prod_model = artifacts_dir / "models" / "production" / "model.joblib"
-    prod_meta = artifacts_dir / "models" / "production" / "metadata.json"
+    current_a = read_current_version(artifacts_dir / "models")
+    assert current_a is not None
+    prod_model = artifacts_dir / "models" / "versions" / current_a / "model.joblib"
+    prod_meta = artifacts_dir / "models" / "versions" / current_a / "metadata.json"
     assert prod_model.exists()
     assert prod_meta.exists()
 
@@ -75,6 +80,11 @@ def test_pipeline_promotes_then_rejects(tmp_path, monkeypatch):
     )
     run_pipeline(csv_b)
 
-    # Production score should not decrease because reject keeps existing model
+    # Production score should not decrease because reject keeps current version.
     score_after = read_prod_score(artifacts_dir)
     assert score_after == score_a
+    assert read_current_version(artifacts_dir / "models") == current_a
+
+    # Both versions are retained for rollback.
+    versions = list((artifacts_dir / "models" / "versions").iterdir())
+    assert len(versions) == 2

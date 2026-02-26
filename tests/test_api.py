@@ -13,7 +13,9 @@ from sklearn.preprocessing import StandardScaler
 
 
 def write_production_artifacts(artifacts_dir: Path):
-    prod = artifacts_dir / "models" / "production"
+    version = "test-version"
+    models_root = artifacts_dir / "models"
+    prod = models_root / "versions" / version
     prod.mkdir(parents=True, exist_ok=True)
 
     # Tiny synthetic training data
@@ -40,11 +42,12 @@ def write_production_artifacts(artifacts_dir: Path):
     (prod / "metadata.json").write_text(
         json.dumps({"metric_name": "f1", "score": 1.0, "trained_at": 0}, indent=2)
     )
+    (models_root / "CURRENT").write_text(f"{version}\n")
 
 
 def load_app_with_env(monkeypatch, artifacts_dir: Path):
     monkeypatch.setenv("ARTIFACTS_DIR", str(artifacts_dir))
-    monkeypatch.delenv("MODEL_SUBDIR", raising=False)  # use default models/production
+    monkeypatch.delenv("MODEL_SUBDIR", raising=False)  # use default CURRENT pointer
 
     import api.main as main_mod
     importlib.reload(main_mod)
